@@ -2,7 +2,8 @@
 import React, { useState, useCallback } from 'react';
 import { CategorySelector } from './components/CategorySelector';
 import { ImageDisplay } from './components/ImageDisplay';
-import { generateFantasyLandscape } from './services/geminiService';
+import { StoryDisplay } from './components/StoryDisplay';
+import { generateFantasyLandscape, generateFantasyStory } from './services/geminiService';
 import { FantasyCategory } from './types';
 import { CATEGORIES, PROMPT_STYLES, CREATURE_OPTIONS, PEOPLE_OPTIONS, OBJECT_OPTIONS, ATMOSPHERE_OPTIONS } from './constants';
 
@@ -13,7 +14,9 @@ const App: React.FC = () => {
   const [peoplePrompt, setPeoplePrompt] = useState<string>('');
   const [objectsPrompt, setObjectsPrompt] = useState<string>('');
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [generatedStory, setGeneratedStory] = useState<string | null>(null);
+  const [isImageLoading, setIsImageLoading] = useState<boolean>(false);
+  const [isStoryLoading, setIsStoryLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = useCallback(async () => {
@@ -22,9 +25,10 @@ const App: React.FC = () => {
       return;
     }
 
-    setIsLoading(true);
+    setIsImageLoading(true);
     setError(null);
     setGeneratedImage(null);
+    setGeneratedStory(null);
 
     const promptParts = [
       'Epic fantasy landscape',
@@ -41,13 +45,28 @@ const App: React.FC = () => {
     try {
       const imageData = await generateFantasyLandscape(prompt);
       setGeneratedImage(`data:image/jpeg;base64,${imageData}`);
+      setIsImageLoading(false);
+
+      setIsStoryLoading(true);
+      try {
+        const storyData = await generateFantasyStory(prompt);
+        setGeneratedStory(storyData);
+      } catch (storyError) {
+         console.error(storyError);
+         // Don't show a blocking error, just fail gracefully
+         setGeneratedStory("The bards were too busy to sing of this land. Please try generating a new world.");
+      } finally {
+        setIsStoryLoading(false);
+      }
+
     } catch (err) {
       console.error(err);
       setError("Failed to generate image. The model may be unavailable. Please try again later.");
-    } finally {
-      setIsLoading(false);
+      setIsImageLoading(false);
     }
   }, [selectedCategory, atmospherePrompt, creaturesPrompt, peoplePrompt, objectsPrompt]);
+  
+  const isLoading = isImageLoading || isStoryLoading;
 
   return (
     <div className="bg-gray-900 text-white min-h-screen">
@@ -138,19 +157,20 @@ const App: React.FC = () => {
                   disabled={isLoading || !selectedCategory}
                   className="bg-purple-600 text-white font-bold text-lg py-3 px-12 rounded-lg shadow-lg hover:bg-purple-500 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-purple-400 focus:ring-opacity-50"
                 >
-                  {isLoading ? 'Conjuring...' : 'Generate Landscape'}
+                  {isImageLoading ? 'Conjuring...' : (isStoryLoading ? 'Storytelling...' : 'Generate Landscape')}
                 </button>
               </div>
             </div>
 
             <div className="mt-8 md:mt-12">
               {error && <p className="text-center text-red-400 bg-red-900/50 p-4 rounded-lg">{error}</p>}
-              <ImageDisplay isLoading={isLoading} generatedImage={generatedImage} />
+              <ImageDisplay isLoading={isImageLoading} generatedImage={generatedImage} />
+              {generatedImage && <StoryDisplay isLoading={isStoryLoading} story={generatedStory} />}
             </div>
           </main>
 
           <footer className="text-center py-6 text-gray-500 text-sm">
-              <p>Powered by Google Gemini. Images are AI-generated.</p>
+              <p>Powered by Google Gemini. Images and stories are AI-generated.</p>
           </footer>
         </div>
       </div>
